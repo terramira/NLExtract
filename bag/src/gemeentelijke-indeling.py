@@ -250,7 +250,7 @@ def end_gemeente(args, gemeentelijke_indeling, provincie_map):
     provinciecode = strip_leading_zeros(args.prov)
     provincienaam = args.prov
 
-    if not re.search("^\d+$", args.prov) and args.prov in provincie_map['name2code']:
+    if not re.search(r'^\d+$', args.prov) and args.prov in provincie_map['name2code']:
         provinciecode = provincie_map['name2code'][args.prov]
         provincienaam = provincie_map['code2name'][provinciecode]
 
@@ -279,7 +279,7 @@ def add_gemeente(args, gemeentelijke_indeling, provincie_map):
     provinciecode = strip_leading_zeros(args.prov)
     provincienaam = args.prov
 
-    if not re.search("^\d+$", args.prov) and args.prov in provincie_map['name2code']:
+    if not re.search(r'^\d+$', args.prov) and args.prov in provincie_map['name2code']:
         provinciecode = provincie_map['name2code'][args.prov]
         provincienaam = provincie_map['code2name'][provinciecode]
 
@@ -409,6 +409,9 @@ def parse_xslx(args):
     cbs_data = hash()
 
     for sheet in workbook:
+        if sheet.title == 'Toelichting':
+            continue
+
         value = sheet.cell(row=1, column=1).value
 
         if not value:
@@ -603,6 +606,14 @@ def add_cbs_data(args, gemeentelijke_indeling, cbs_data):
 
                 indeling['provincie'][provinciecode]['gemeente'][gemeentecode]['attributes']['einddatum'] = einddatum
 
+            # Update naam if not the same as last year
+            elif gemeentenaam != cbs_data[provinciecode][gemeentecode]['gemeentenaam']:
+                gemeentenaam = cbs_data[provinciecode][gemeentecode]['gemeentenaam']
+
+                if args.verbose:
+                    print("Updating naam for gemeente %s (%s) [%s|%s] in provincie %s (%s)" % (gemeentenaam, gemeentecode, begindatum, einddatum, provincienaam, provinciecode))
+
+                indeling['provincie'][provinciecode]['gemeente'][gemeentecode]['attributes']['naam'] = gemeentenaam
         for gemeentecode in sorted(cbs_data[provinciecode], key=int):
             # Add municipalities created this year
             if gemeentecode not in indeling['provincie'][provinciecode]['gemeente']:
@@ -628,7 +639,7 @@ def add_cbs_data(args, gemeentelijke_indeling, cbs_data):
 
 
 def compare_datum_and_year(args, datum, year):
-    match = re.match("^(\d{4})-(\d{2})-(\d{2})$", datum)
+    match = re.match(r'^(\d{4})-(\d{2})-(\d{2})$', datum)
     if match:
         datum_year = match.group(1)
         datum_month = match.group(2)
@@ -909,7 +920,7 @@ def main():
         parser.error('Missing required option: --output')
 
     # Sanity checks
-    if args.date and not re.search("^\d{4}-\d{2}-\d{2}$", args.date):
+    if args.date and not re.search(r'^\d{4}-\d{2}-\d{2}$', args.date):
         parser.error('Invalid date format, use YYYY-MM-DD')
 
     # Use the same file for input and output by default
