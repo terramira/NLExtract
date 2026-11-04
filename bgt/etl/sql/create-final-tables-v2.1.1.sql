@@ -1,5 +1,8 @@
+-- set search_path = "latest", "public";
+
 -- Create final tables in BGT schema
 set time zone 'Europe/Amsterdam';
+
 
 -- Function to parse PostGIS version number
 CREATE OR REPLACE FUNCTION _nlx_parse_version(VARCHAR)
@@ -61,7 +64,7 @@ BEGIN
 
     IF EXISTS (SELECT 1
             FROM information_schema.columns
-            WHERE table_schema='{schema}' AND table_name=tbl AND column_name=oldname) THEN
+               WHERE table_schema='{schema}' AND table_name=tbl AND column_name=oldname) THEN
         EXECUTE FORMAT('ALTER TABLE %s RENAME COLUMN %s TO %s', tbl, oldname, newname);
         RETURN TRUE;
     ELSE
@@ -72,6 +75,7 @@ END;
 $$
 LANGUAGE plpgsql;
 
+BEGIN;
 -- Bak
 select _nlx_renamecolumn('bak_tmp', 'wkb_geometry', 'geometrie_punt');
 
@@ -89,7 +93,10 @@ create or replace view bakactueel as select * from bak where eindregistratie is 
 create or replace view bakactueelbestaand as select * from bak where eindregistratie is null and bgt_status = 'bestaand' and plus_status <> 'plan' and plus_status <> 'historie';
 
 drop table bak_tmp;
+COMMIT;
 
+
+BEGIN;
 -- Begroeid terreindeel
 drop table if exists begroeidterreindeel cascade;
 create table begroeidterreindeel as select ogc_fid, geometrie_vlak, geometrie_kruinlijn, gml_id, namespace, lokaalid, cast(objectbegintijd as date), cast(objecteindtijd as date), cast(tijdstipregistratie as timestamptz), cast(eindregistratie as timestamptz), cast(lv_publicatiedatum as timestamptz), bronhouder, cast(inonderzoek as boolean), relatievehoogteligging, bgt_status, plus_status, bgt_fysiekvoorkomen, plus_fysiekvoorkomen, cast(begroeidterreindeeloptalud as boolean) from begroeidterreindeel_tmp;
@@ -106,7 +113,10 @@ create or replace view begroeidterreindeelactueel as select * from begroeidterre
 create or replace view begroeidterreindeelactueelbestaand as select * from begroeidterreindeel where eindregistratie is null and bgt_status = 'bestaand' and plus_status <> 'plan' and plus_status <> 'historie';
 
 drop table begroeidterreindeel_tmp;
+COMMIT;
 
+
+BEGIN;
 -- Bord
 select _nlx_renamecolumn('bord_tmp', 'wkb_geometry', 'geometrie_punt');
 
@@ -124,7 +134,9 @@ create or replace view bordactueel as select * from bord where eindregistratie i
 create or replace view bordactueelbestaand as select * from bord where eindregistratie is null and bgt_status = 'bestaand' and plus_status <> 'plan' and plus_status <> 'historie';
 
 drop table bord_tmp;
+COMMIT;
 
+BEGIN;
 -- Buurt
 select _nlx_renamecolumn('buurt_tmp', 'wkb_geometry', 'geometrie_vlak');
 
@@ -143,6 +155,9 @@ create or replace view buurtactueelbestaand as select * from buurt where eindreg
 
 drop table buurt_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Functioneel gebied
 select _nlx_renamecolumn('functioneelgebied_tmp', 'wkb_geometry', 'geometrie_vlak');
 
@@ -161,6 +176,9 @@ create or replace view functioneelgebiedactueelbestaand as select * from functio
 
 drop table functioneelgebied_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Gebouwinstallatie
 select _nlx_renamecolumn('gebouwinstallatie_tmp', 'wkb_geometry', 'geometrie_vlak');
 
@@ -179,6 +197,9 @@ create or replace view gebouwinstallatieactueelbestaand as select * from gebouwi
 
 drop table gebouwinstallatie_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Installatie
 select _nlx_renamecolumn('installatie_tmp', 'wkb_geometry', 'geometrie_punt');
 
@@ -197,6 +218,9 @@ create or replace view installatieactueelbestaand as select * from installatie w
 
 drop table installatie_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Kast
 select _nlx_renamecolumn('kast_tmp', 'wkb_geometry', 'geometrie_punt');
 
@@ -215,6 +239,9 @@ create or replace view kastactueelbestaand as select * from kast where eindregis
 
 drop table kast_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Kunstwerkdeel
 -- Note that some hoogspanningsmast features are curve polygons, and some other features are multi
 -- surfaces. This is invalid, but these geometries are converted nonetheless. This should be
@@ -265,6 +292,9 @@ create or replace view mastactueelbestaand as select * from mast where eindregis
 
 drop table mast_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Onbegroeid terreindeel
 drop table if exists onbegroeidterreindeel cascade;
 create table onbegroeidterreindeel as select ogc_fid, geometrie_vlak, geometrie_kruinlijn, gml_id, namespace, lokaalid, cast(objectbegintijd as date), cast(objecteindtijd as date), cast(tijdstipregistratie as timestamptz), cast(eindregistratie as timestamptz), cast(lv_publicatiedatum as timestamptz), bronhouder, cast(inonderzoek as boolean), relatievehoogteligging, bgt_status, plus_status, bgt_fysiekvoorkomen, plus_fysiekvoorkomen, cast(onbegroeidterreindeeloptalud as boolean) from onbegroeidterreindeel_tmp;
@@ -305,6 +335,9 @@ FROM onbegroeidterreindeel
 WHERE onbegroeidterreindeel.eindregistratie IS NULL AND onbegroeidterreindeel.bgt_status::text = 'bestaand'::text AND onbegroeidterreindeel.plus_status::text <> 'plan'::text AND onbegroeidterreindeel.plus_status::text <> 'historie'::text;
 
 drop table onbegroeidterreindeel_tmp;
+COMMIT;
+
+BEGIN;
 
 -- Ondersteunend waterdeel
 select _nlx_renamecolumn('ondersteunendwaterdeel_tmp', 'wkb_geometry', 'geometrie_vlak');
@@ -323,6 +356,9 @@ create or replace view ondersteunendwaterdeelactueel as select * from ondersteun
 create or replace view ondersteunendwaterdeelactueelbestaand as select * from ondersteunendwaterdeel where eindregistratie is null and bgt_status = 'bestaand' and plus_status <> 'plan' and plus_status <> 'historie';
 
 drop table ondersteunendwaterdeel_tmp;
+COMMIT;
+
+BEGIN;
 
 -- Ondersteunend wegdeel
 drop table if exists ondersteunendwegdeel cascade;
@@ -340,6 +376,10 @@ create or replace view ondersteunendwegdeelactueel as select * from ondersteunen
 create or replace view ondersteunendwegdeelactueelbestaand as select * from ondersteunendwegdeel where eindregistratie is null and bgt_status = 'bestaand' and plus_status <> 'plan' and plus_status <> 'historie';
 
 drop table ondersteunendwegdeel_tmp;
+
+COMMIT;
+
+BEGIN;
 
 -- Ongeclassificeerd object
 select _nlx_renamecolumn('ongeclassificeerdobject_tmp', 'wkb_geometry', 'geometrie_vlak');
@@ -359,6 +399,9 @@ create or replace view ongeclassificeerdobjectactueelbestaand as select * from o
 
 drop table ongeclassificeerdobject_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Openbare ruimte
 select _nlx_renamecolumn('openbareruimte_tmp', 'wkb_geometry', 'geometrie_vlak');
 
@@ -377,6 +420,9 @@ create or replace view openbareruimteactueelbestaand as select * from openbareru
 
 drop table openbareruimte_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Openbare-ruimtelabel
 select _nlx_renamecolumn('openbareruimtelabel_tmp', 'wkb_geometry', 'geometrie_punt');
 
@@ -395,6 +441,9 @@ create or replace view openbareruimtelabelactueelbestaand as select * from openb
 
 drop table openbareruimtelabel_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Overbruggingsdeel
 select _nlx_renamecolumn('overbruggingsdeel_tmp', 'wkb_geometry', 'geometrie_vlak');
 
@@ -413,6 +462,9 @@ create or replace view overbruggingsdeelactueelbestaand as select * from overbru
 
 drop table overbruggingsdeel_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Overig bouwwerk
 select _nlx_renamecolumn('overigbouwwerk_tmp', 'wkb_geometry', 'geometrie_vlak');
 
@@ -431,6 +483,9 @@ create or replace view overigbouwwerkactueelbestaand as select * from overigbouw
 
 drop table overigbouwwerk_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Overige scheiding
 drop table if exists overigescheiding cascade;
 create table overigescheiding as select ogc_fid, case when st_dimension(wkb_geometry) = 1 then _nlx_force_curve(wkb_geometry)::geometry(COMPOUNDCURVE, 28992) else null::geometry(COMPOUNDCURVE, 28992) end geometrie_lijn, case when st_dimension(wkb_geometry) = 2 then _nlx_force_curve(wkb_geometry)::geometry(CURVEPOLYGON, 28992) else null::geometry(CURVEPOLYGON, 28992) end geometrie_vlak, gml_id, namespace, lokaalid, cast(objectbegintijd as date), cast(objecteindtijd as date), cast(tijdstipregistratie as timestamptz), cast(eindregistratie as timestamptz), cast(lv_publicatiedatum as timestamptz), bronhouder, cast(inonderzoek as boolean), relatievehoogteligging, bgt_status, plus_status, plus_type from overigescheiding_tmp;
@@ -448,6 +503,9 @@ create or replace view overigescheidingactueelbestaand as select * from overiges
 
 drop table overigescheiding_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Paal
 select _nlx_renamecolumn('paal_tmp', 'wkb_geometry', 'geometrie_punt');
 
@@ -466,6 +524,9 @@ create or replace view paalactueelbestaand as select * from paal where eindregis
 
 drop table paal_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Pand
 select _nlx_renamecolumn('pand_tmp', 'wkb_geometry', 'geometrie_vlak');
 
@@ -486,6 +547,9 @@ create or replace view pandactueelbestaand as select * from pand where eindregis
 
 drop table pand_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Pand_nummeraanduiding
 select _nlx_renamecolumn('pand_nummeraanduiding_tmp', 'wkb_geometry', 'geometrie_nummeraanduiding');
 
@@ -504,6 +568,9 @@ create or replace view pand_nummeraanduidingactueelbestaand as select * from pan
 
 drop table pand_nummeraanduiding_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Plaatsbepalingspunt
 select _nlx_renamecolumn('plaatsbepalingspunt_tmp', 'wkb_geometry', 'geometrie_punt');
 
@@ -516,6 +583,9 @@ create index plaatsbepalingspunt_geometrie_punt_geom_idx on plaatsbepalingspunt 
 
 drop table plaatsbepalingspunt_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Put
 select _nlx_renamecolumn('put_tmp', 'wkb_geometry', 'geometrie_punt');
 
@@ -534,6 +604,9 @@ create or replace view putactueelbestaand as select * from put where eindregistr
 
 drop table put_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Scheiding
 drop table if exists scheiding cascade;
 create table scheiding as select ogc_fid, case when st_dimension(wkb_geometry) = 1 then _nlx_force_curve(wkb_geometry)::geometry(COMPOUNDCURVE, 28992) else null::geometry(COMPOUNDCURVE, 28992) end geometrie_lijn, case when st_dimension(wkb_geometry) = 2 then _nlx_force_curve(wkb_geometry)::geometry(CURVEPOLYGON, 28992) else null::geometry(CURVEPOLYGON, 28992) end geometrie_vlak, gml_id, namespace, lokaalid, cast(objectbegintijd as date), cast(objecteindtijd as date), cast(tijdstipregistratie as timestamptz), cast(eindregistratie as timestamptz), cast(lv_publicatiedatum as timestamptz), bronhouder, cast(inonderzoek as boolean), relatievehoogteligging, bgt_status, plus_status, bgt_type, plus_type from scheiding_tmp;
@@ -551,6 +624,9 @@ create or replace view scheidingactueelbestaand as select * from scheiding where
 
 drop table scheiding_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Sensor
 drop table if exists sensor cascade;
 create table sensor as select ogc_fid, case when st_dimension(wkb_geometry) = 1 then _nlx_force_curve(wkb_geometry)::geometry(COMPOUNDCURVE, 28992) else null::geometry(COMPOUNDCURVE, 28992) end geometrie_lijn, case when st_dimension(wkb_geometry) = 0 then wkb_geometry::geometry(POINT, 28992) else null::geometry(POINT, 28992) end geometrie_punt, gml_id, namespace, lokaalid, cast(objectbegintijd as date), cast(objecteindtijd as date), cast(tijdstipregistratie as timestamptz), cast(eindregistratie as timestamptz), cast(lv_publicatiedatum as timestamptz), bronhouder, cast(inonderzoek as boolean), relatievehoogteligging, bgt_status, plus_status, bgt_type, plus_type from sensor_tmp;
@@ -568,6 +644,9 @@ create or replace view sensoractueelbestaand as select * from sensor where eindr
 
 drop table sensor_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Spoor
 select _nlx_renamecolumn('spoor_tmp', 'wkb_geometry', 'geometrie_lijn');
 
@@ -586,6 +665,9 @@ create or replace view spooractueelbestaand as select * from spoor where eindreg
 
 drop table spoor_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Stadsdeel
 select _nlx_renamecolumn('stadsdeel_tmp', 'wkb_geometry', 'geometrie_vlak');
 
@@ -604,6 +686,9 @@ create or replace view stadsdeelactueelbestaand as select * from stadsdeel where
 
 drop table stadsdeel_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Straatmeubilair
 select _nlx_renamecolumn('straatmeubilair_tmp', 'wkb_geometry', 'geometrie_punt');
 
@@ -622,6 +707,9 @@ create or replace view straatmeubilairactueelbestaand as select * from straatmeu
 
 drop table straatmeubilair_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Tunneldeel
 select _nlx_renamecolumn('tunneldeel_tmp', 'wkb_geometry', 'geometrie_vlak');
 
@@ -640,6 +728,9 @@ create or replace view tunneldeelactueelbestaand as select * from tunneldeel whe
 
 drop table tunneldeel_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Vegetatieobject
 drop table if exists vegetatieobject cascade;
 create table vegetatieobject as select ogc_fid, case when st_dimension(wkb_geometry) = 1 then _nlx_force_curve(wkb_geometry)::geometry(COMPOUNDCURVE, 28992) else null::geometry(COMPOUNDCURVE, 28992) end geometrie_lijn, case when st_dimension(wkb_geometry) = 0 then wkb_geometry::geometry(POINT, 28992) else null::geometry(POINT, 28992) end geometrie_punt, case when st_dimension(wkb_geometry) = 2 then _nlx_force_curve(wkb_geometry)::geometry(CURVEPOLYGON, 28992) else null::geometry(CURVEPOLYGON, 28992) end geometrie_vlak, gml_id, namespace, lokaalid, cast(objectbegintijd as date), cast(objecteindtijd as date), cast(tijdstipregistratie as timestamptz), cast(eindregistratie as timestamptz), cast(lv_publicatiedatum as timestamptz), bronhouder, cast(inonderzoek as boolean), relatievehoogteligging, bgt_status, plus_status, bgt_type, plus_type from vegetatieobject_tmp;
@@ -658,6 +749,9 @@ create or replace view vegetatieobjectactueelbestaand as select * from vegetatie
 
 drop table vegetatieobject_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Waterdeel
 select _nlx_renamecolumn('waterdeel_tmp', 'wkb_geometry', 'geometrie_vlak');
 
@@ -676,6 +770,9 @@ create or replace view waterdeelactueelbestaand as select * from waterdeel where
 
 drop table waterdeel_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Waterinrichtingselement
 drop table if exists waterinrichtingselement cascade;
 create table waterinrichtingselement as select ogc_fid, case when st_dimension(wkb_geometry) = 1 then _nlx_force_curve(wkb_geometry)::geometry(COMPOUNDCURVE, 28992) else null::geometry(COMPOUNDCURVE, 28992) end geometrie_lijn, case when st_dimension(wkb_geometry) = 0 then wkb_geometry::geometry(POINT, 28992) else null::geometry(POINT, 28992) end geometrie_punt, gml_id, namespace, lokaalid, cast(objectbegintijd as date), cast(objecteindtijd as date), cast(tijdstipregistratie as timestamptz), cast(eindregistratie as timestamptz), cast(lv_publicatiedatum as timestamptz), bronhouder, cast(inonderzoek as boolean), relatievehoogteligging, bgt_status, plus_status, bgt_type, plus_type from waterinrichtingselement_tmp;
@@ -693,6 +790,9 @@ create or replace view waterinrichtingselementactueelbestaand as select * from w
 
 drop table waterinrichtingselement_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Waterschap
 select _nlx_renamecolumn('waterschap_tmp', 'wkb_geometry', 'geometrie_vlak');
 
@@ -711,6 +811,9 @@ create or replace view waterschapactueelbestaand as select * from waterschap whe
 
 drop table waterschap_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Wegdeel
 drop table if exists wegdeel cascade;
 create table wegdeel as select ogc_fid, geometrie_vlak, geometrie_kruinlijn, gml_id, namespace, lokaalid, cast(objectbegintijd as date), cast(objecteindtijd as date), cast(tijdstipregistratie as timestamptz), cast(eindregistratie as timestamptz), cast(lv_publicatiedatum as timestamptz), bronhouder, cast(inonderzoek as boolean), relatievehoogteligging, bgt_status, plus_status, bgt_functie, plus_functie, bgt_fysiekvoorkomen, plus_fysiekvoorkomen, cast(wegdeeloptalud as boolean) from wegdeel_tmp;
@@ -728,6 +831,9 @@ create or replace view wegdeelactueelbestaand as select * from wegdeel where ein
 
 drop table wegdeel_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Weginrichtingselement
 drop table if exists weginrichtingselement cascade;
 create table weginrichtingselement as select ogc_fid, case when st_dimension(wkb_geometry) = 1 then _nlx_force_curve(wkb_geometry)::geometry(COMPOUNDCURVE, 28992) else null::geometry(COMPOUNDCURVE, 28992) end geometrie_lijn, case when st_dimension(wkb_geometry) = 0 then wkb_geometry::geometry(POINT, 28992) else null::geometry(POINT, 28992) end geometrie_punt, case when st_dimension(wkb_geometry) = 2 then _nlx_force_curve(wkb_geometry)::geometry(CURVEPOLYGON, 28992) else null::geometry(CURVEPOLYGON, 28992) end geometrie_vlak, gml_id, namespace, lokaalid, cast(objectbegintijd as date), cast(objecteindtijd as date), cast(tijdstipregistratie as timestamptz), cast(eindregistratie as timestamptz), cast(lv_publicatiedatum as timestamptz), bronhouder, cast(inonderzoek as boolean), relatievehoogteligging, bgt_status, plus_status, bgt_type, plus_type from weginrichtingselement_tmp;
@@ -746,6 +852,9 @@ create or replace view weginrichtingselementactueelbestaand as select * from weg
 
 drop table weginrichtingselement_tmp;
 
+COMMIT;
+
+BEGIN;
 -- Wijk
 select _nlx_renamecolumn('wijk_tmp', 'wkb_geometry', 'geometrie_vlak');
 
@@ -763,6 +872,8 @@ create or replace view wijkactueel as select * from wijk where eindregistratie i
 create or replace view wijkactueelbestaand as select * from wijk where eindregistratie is null and bgt_status = 'bestaand' and plus_status <> 'plan' and plus_status <> 'historie';
 
 drop table wijk_tmp;
+
+COMMIT;
 
 -- Cleanup functions
 DROP FUNCTION _nlx_parse_version(version VARCHAR);

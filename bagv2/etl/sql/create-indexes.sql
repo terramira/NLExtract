@@ -53,6 +53,9 @@ DROP INDEX IF EXISTS gem_wpl_gemeentecode_datum_idx CASCADE;
 CREATE INDEX gem_wpl_woonplaatscode_idx ON gemeente_woonplaats USING btree (woonplaatscode);
 CREATE INDEX gem_wpl_gemeentecode_datum_idx ON gemeente_woonplaats USING btree (gemeentecode);
 
+DROP INDEX IF EXISTS prov_gem_gemeentecode_idx CASCADE;
+CREATE INDEX prov_gem_gemeentecode_idx ON provincie_gemeente USING btree (gemeentecode);
+
 -- Indexen relatie tabellen
 DROP INDEX IF EXISTS verblijfsobjectpandkey CASCADE;
 DROP INDEX IF EXISTS verblijfsobjectpand_pand CASCADE;
@@ -64,6 +67,9 @@ CREATE INDEX verblijfsobjectgebruiksdoelkey ON verblijfsobjectgebruiksdoel USING
 DROP INDEX IF EXISTS adresseerbaarobjectnevenadreskey CASCADE;
 CREATE INDEX
         adresseerbaarobjectnevenadreskey ON adresseerbaarobjectnevenadres USING btree (identificatie,voorkomenidentificatie, begindatumTijdvakGeldigheid, nevenadres);
+
+DROP INDEX IF EXISTS nlx_bag_info_key CASCADE;
+CREATE INDEX nlx_bag_info_key ON nlx_bag_info USING btree (sleutel);
 
 INSERT INTO nlx_bag_log (actie, bestand) VALUES ('end_indexing', 'create-indexes.sql');
 

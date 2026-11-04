@@ -69,6 +69,18 @@
 -- extra pand niet-bestaand status: 'Pand ten onrechte opgevoerd'
 -- extra pand bestaand status: 'Verbouwing pand'
 
+-- 20241224 Peter van Wee
+-- nieuwe kolom toegevoegd (gerelateerde_panden_dit_VBO) met de panden die verbonden zijn bij het VBO_ID (comma gescheiden)
+-- momenteel is er 1 VBO (0758010000007915) met maar liefst 23 panden gekoppeld
+
+-- 20250311 Just van den Broecke
+-- nieuwe text kolom toegevoegd 'openbareruimtetype',
+-- waarden: 'Weg','Water','Spoorbaan','Terrein','Kunstwerk','Landschappelijk gebied','Administratief gebied'
+
+-- 20251007 Peter van Wee
+-- Issue: https://github.com/nlextract/NLExtract/issues/409
+-- Ontdubbel slagen aangepast zodat het meest logische record per uniq_key over blijft.
+
 -- SET search_path TO bagactueel,public;
 set statement_timeout to 50000000;
 
@@ -89,11 +101,13 @@ LANGUAGE 'plpgsql' IMMUTABLE;
 -----------------------------------------------------
 -- Stel vast van welke adressen we uiteindelijk een record willen hebben
 -- Dat vullen we later aan meer meer gegevens van bv VBO en PND
+-- 20251008 Peter van Wee  View vervangen door tabel met indexen wegens performance issues
 BEGIN;
 SELECT PRINT_NOTICE('start: 1 nummeraanduidingactueelbestaand_compleet: '||current_time);
 -- Omdat NL extract adressen met postcode uitsluit in de view nummeraanduidingactueelbestaand maken we eerst een view inclusief de adressen zonder postcode
-DROP VIEW IF EXISTS nummeraanduidingactueelbestaand_compleet cascade;
-CREATE OR REPLACE VIEW nummeraanduidingactueelbestaand_compleet AS
+--DROP VIEW IF EXISTS nummeraanduidingactueelbestaand_compleet cascade;
+DROP table IF EXISTS nummeraanduidingactueelbestaand_compleet cascade;
+CREATE table nummeraanduidingactueelbestaand_compleet AS
 Select
 	NAD.gid,
 	NAD.identificatie,
@@ -128,7 +142,10 @@ where     NAD.begindatumtijdvakgeldigheid <= LOCALTIMESTAMP
     AND NAD.nummeraanduidingstatus <> 'Naamgeving ingetrokken';
 COMMIT;
 
-
+--20251008  index toegevoegd
+CREATE INDEX idx_nummeraanduidingactueelbestaand_compleet ON nummeraanduidingactueelbestaand_compleet USING btree(gerelateerdewoonplaats);
+CREATE INDEX idx2_nummeraanduidingactueelbestaand_compleet ON nummeraanduidingactueelbestaand_compleet USING btree(identificatie);
+CREATE INDEX idx3_nummeraanduidingactueelbestaand_compleet ON nummeraanduidingactueelbestaand_compleet USING btree(gerelateerdeopenbareruimte);
 
 BEGIN;
 --  In de view provincie_gemeenteactueebestaand ontbreken begin van het jaar de gemeentes die ophouden te bestaan op de eerste van het jaar. Als dit script gedraaid wordt begin januari gebaseerd op een postgis dump van december
@@ -172,6 +189,8 @@ WHERE
 COMMIT;
 --20200530 Query returned successfully: 2500 rows affected, 02:27 minutes execution time.
 
+--20251008  index toegevoegd
+CREATE INDEX idx_BAG_WPL_ACTBEST_gegevens ON BAG_WPL_ACTBEST_gegevens USING btree(woonplaats_id);
 
 BEGIN;
 -- Hier maken we de initiele adrestabel. LAter worden records verwijderd om adressen uniek te krijgen
@@ -189,7 +208,7 @@ case when NAD.postcode is null then null else 1 end pchnhlht_UNIEK,
 NAD.identificatie as NAD_ID,
 OBR.openbareruimtenaam,
 OBR.verkorteopenbareruimtenaam,
-OBR.openbareruimtetype,
+OBR.openbareruimtetype::text as openbareruimtetype,
 NAD.huisnummer,
 NAD.huisletter,
 NAD.huisnummertoevoeging,
@@ -247,7 +266,7 @@ case when NAD.postcode is null then null else 1 end pchnhlht_UNIEK,
 NAD.identificatie as NAD_ID,
 OBR.openbareruimtenaam,
 OBR.verkorteopenbareruimtenaam,
-OBR.openbareruimtetype,
+OBR.openbareruimtetype::text as openbareruimtetype,
 NAD.huisnummer,
 NAD.huisletter,
 NAD.huisnummertoevoeging,
@@ -403,6 +422,7 @@ create table adres_te_ontdubbelen as
 SELECT distinct
 0 as Verwijderen,
 0 as intersects,
+0 as ontdubbelslag,
   a.uniq_key,
   row_number() OVER (PARTITION BY a.uniq_key ORDER BY   a.nad_id desc ) as Rangorde_uniq_key,
   a.aantaldubbel,
@@ -590,45 +610,274 @@ Select uniq_key,  count(*) as aantal from adres_te_ontdubbelen where verwijderen
 COMMIT;
 
 
-
+-- 20251007 Peter van Wee. Ontdubbel slagen aangepast. Zie de reeks hieronder.
 BEGIN;
--- update adres_te_ontdubbelen
--- verwijder records van uniq_key met een pand dat niet bestaat indien uniq_key ook een pand heeft dat wel bestaat.
-SELECT PRINT_NOTICE('start: 10 Update_1 '||current_time);
+SELECT PRINT_NOTICE('start: 10 Update_1  '||current_time);
 update adres_te_ontdubbelen
-set Verwijderen = 1
+set Verwijderen = 1,ontdubbelslag = 1
 where nad_id
 in(
-select distinct a_nad_id from adres_vergelijk
+select distinct b_nad_id from adres_vergelijk
 where
-  (
-  ( a_Pand_bestaand = 0 and  b_Pand_bestaand = 1)
-  )
+( a_adresseerbaarobject_status like 'Verblijfsobject in gebruik%'  and b_adresseerbaarobject_status not like 'Verblijfsobject in gebruik%' )
 ) ;
--- 20200530 Query returned successfully: 2999 rows affected, 115 msec execution time.
 COMMIT;
 
 BEGIN;
--- update
--- Verwijder record van uniq_key met laagste VBO_id indien het een uniq_key is met het zelfde pand.
-SELECT PRINT_NOTICE('start: 11 Update_2 '||current_time);
+SELECT PRINT_NOTICE('start: 10 Update_2  '||current_time);
 update adres_te_ontdubbelen
-set Verwijderen = 1
+set Verwijderen = 1,ontdubbelslag = 2
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_adresseerbaarobject_status not like 'Verblijfsobject in gebruik%'    and b_adresseerbaarobject_status not like 'Verblijfsobject in gebruik%'   and a_pandstatus like 'Pand in gebruik%' and b_pandstatus not like 'Pand in gebruik%'  )
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_3  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 3
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_adresseerbaarobject_status <> 'Verblijfsobject buiten gebruik'	and b_adresseerbaarobject_status = 'Verblijfsobject buiten gebruik'  )
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_4  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 4
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_pand_bestaand = 1 	and a_pand_bestaand= 0  )
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_5  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 5
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+(a_adresseerbaarobject_status= b_adresseerbaarobject_status and a_pandstatus like 'Pand in gebruik%' and b_pandstatus like 'Pand in gebruik%' and
+a_max_bouwjaar>b_max_bouwjaar)
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_6  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 6
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+(a_adresseerbaarobject_status in ('Verbouwing verblijfsobject', 'Verblijfsobject in gebruik (niet ingemeten)', 'Verblijfsobject in gebruik')
+and
+b_adresseerbaarobject_status not in ('Verbouwing verblijfsobject', 'Verblijfsobject in gebruik (niet ingemeten)', 'Verblijfsobject in gebruik')
+and  a_pand_bestaand = 1 )
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_7  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 7
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+(a_adresseerbaarobject_status= b_adresseerbaarobject_status  and a_pand_bestaand=b_pand_bestaand and b_nevenadres =1 and a_nevenadres = 0)
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_8  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 8
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_adresseerbaarobject_status= 'Verblijfsobject in gebruik (niet ingemeten)' and b_adresseerbaarobject_status= 'Verblijfsobject in gebruik' and  a_pand_bestaand=b_pand_bestaand )
+) ;
+COMMIT;
+BEGIN;
+--select count(distinct uniq_key) from adres_te_ontdubbelen where verwijderen = 0;
+SELECT PRINT_NOTICE('start: 10 Update_9  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 9
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_adresseerbaarobject_status= 'Plaats aangewezen' and b_adresseerbaarobject_status = 'Verblijfsobject gevormd' )
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_10  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 10
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_pandstatus in ('Bouw gestart', 'Verbouwing pand') and b_pandstatus = 'Bouwvergunning verleend' and a_adresseerbaarobject_status= b_adresseerbaarobject_status )
+) ;
+COMMIT;
+--select count(distinct uniq_key) from adres_te_ontdubbelen where verwijderen = 0;
+--11
+BEGIN;
+--select count(distinct uniq_key) from adres_te_ontdubbelen where verwijderen = 0;
+SELECT PRINT_NOTICE('start: 10 Update_11  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 11
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_pandstatus = 'Pand in gebruik' and b_pandstatus = 'Sloopvergunning verleend' and a_adresseerbaarobject_status= b_adresseerbaarobject_status  )
+
+) ;
+COMMIT;
+
+BEGIN;
+--select count(distinct uniq_key) from adres_te_ontdubbelen where verwijderen = 0;
+SELECT PRINT_NOTICE('start: 10 Update_12  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 12
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_pandstatus <> 'Niet gerealiseerd pand' and a_pandstatus is not null  and b_pandstatus = 'Niet gerealiseerd pand' and a_adresseerbaarobject_status= b_adresseerbaarobject_status  )
+
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_13  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 13
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_pandstatus = 'Pand in gebruik' and b_pandstatus <> 'Pand in gebruik'  and b_pandstatus = 'Niet gerealiseerd pand' and a_max_bouwjaar > b_max_bouwjaar and  a_adresseerbaarobject_status= b_adresseerbaarobject_status  )
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_14  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 14
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_adresseerbaarobject_status like 'Verblijfsobject in gebruik%'  and b_adresseerbaarobject_status like 'Verblijfsobject in gebruik%' and a_pandstatus like 'Pand in gebruik%' and   b_pandstatus not like 'Pand in gebruik%'
+and( a_adresseerbaarobject_status<> b_adresseerbaarobject_status  or a_pandstatus<> b_pandstatus)
+)
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_15  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 15
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_adresseerbaarobject_status = b_adresseerbaarobject_status and a_pandstatus = 'Verbouwing pand' and   b_pandstatus = 'Bouw gestart')
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_16  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 16
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_adresseerbaarobject_status = b_adresseerbaarobject_status and a_pandstatus=   b_pandstatus  and a_max_bouwjaar > b_max_bouwjaar)
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_17  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 17
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_adresseerbaarobject_status = b_adresseerbaarobject_status and
+  a_pandstatus=   b_pandstatus  and
+  a_max_bouwjaar = b_max_bouwjaar
+  and nad_recentst = 'a')
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_18  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 18
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_adresseerbaarobject_status = b_adresseerbaarobject_status and
+  a_pandstatus=   b_pandstatus  and
+  a_max_bouwjaar = b_max_bouwjaar
+  and (nad_recentst = 'gelijk' or nad_recentst is null)
+  and adresseerbaarobject_recentst = 'a')
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_19  '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 19
+where nad_id
+in(
+select distinct b_nad_id from adres_vergelijk
+where
+( a_adresseerbaarobject_status = b_adresseerbaarobject_status and
+  a_pandstatus=   b_pandstatus  and
+  a_max_bouwjaar = b_max_bouwjaar
+  and (nad_recentst = 'gelijk' or nad_recentst is null)
+    and adresseerbaarobject_recentst = 'gelijk'
+  and pnd_recentst = 'a')
+) ;
+COMMIT;
+
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_20   '||current_time);
+update adres_te_ontdubbelen
+set Verwijderen = 1,ontdubbelslag = 20
 where nad_id
 in(
 select distinct a_nad_id from adres_vergelijk v inner join adres_nog_te_ontdubbelen nog on v.a_uniq_key  = nog.uniq_key
 where
   v.a_Pand_bestaand =  v.b_Pand_bestaand  and  v.b_typeadresseerbaarobjectkort='VBO' and  v.pand_ID_Hoogst = 'zelfde_pnd' and v.adrobj_id_hoogst = 'b'
 ) ;
--- 20200530 Query returned successfully: 5893 rows affected, 185 msec execution time.
 COMMIT;
 
 BEGIN;
--- update
--- Verwijder record van uniq_key met laagste pand_id indien de pandstatus gelijk is.
-SELECT PRINT_NOTICE('start: 12 Update_3 '||current_time);
+SELECT PRINT_NOTICE('start: 10 Update_21   '||current_time);
 update adres_te_ontdubbelen
-set Verwijderen = 1
+set Verwijderen = 1,ontdubbelslag = 21
 where nad_id
 in(
 select distinct a_nad_id from adres_vergelijk v inner join adres_nog_te_ontdubbelen nog on v.a_uniq_key  = nog.uniq_key
@@ -637,32 +886,26 @@ where
    (v.a_Pand_bestaand =  v.b_Pand_bestaand  and v.pand_ID_Hoogst = 'b' )
   )
 ) ;
-
--- 20200530 Query returned successfully: 1977 rows affected, 75 msec execution time.
 COMMIT;
-BEGIN;
 
--- update
--- Verwijder record van uniq_key met laagste nummeraanduding_id  indien de status van het adresseerbare object  en de pandstatus gelijk zijn. (dus alleen van VBO's want de status van een STA en LIG zijn null en worden niet geevalueerd) )
-SELECT PRINT_NOTICE('start: 13 Update_4 '||current_time);
+BEGIN;
+SELECT PRINT_NOTICE('start: 10 Update_22   '||current_time);
 update adres_te_ontdubbelen
-set Verwijderen = 1
+set Verwijderen = 1,ontdubbelslag = 22
 where nad_id
 in(
 select distinct a_nad_id from adres_vergelijk v inner join adres_nog_te_ontdubbelen nog on v.a_uniq_key  = nog.uniq_key
 where
   (
-   (v.a_adresseerbaarobject_status=v.b_adresseerbaarobject_status and v.a_pandstatus=b_pandstatus and nad_id_hoogst = 'b')
+   (v.a_adresseerbaarobject_status=v.b_adresseerbaarobject_status and (  v.a_pandstatus=b_pandstatus or( v.a_pandstatus is null and b_pandstatus is null) )and nad_id_hoogst = 'b')
   )
 ) ;
--- 20200530 Query returned successfully: 804 rows affected, 53 msec execution time.
 COMMIT;
+
 BEGIN;
---update
--- verwijder record van LIG of STA indien uniq_key ook een VBO heeft met een pand een status heeft dat het bewoond kan zijn.
-SELECT PRINT_NOTICE('start: 14 Update_5 '||current_time);
+SELECT PRINT_NOTICE('start: 10 Update_23   '||current_time);
 update adres_te_ontdubbelen
-set Verwijderen = 1
+set Verwijderen = 1,ontdubbelslag = 23
 where nad_id
 in(
 select distinct a_nad_id from adres_vergelijk v inner join adres_nog_te_ontdubbelen nog on v.a_uniq_key  = nog.uniq_key
@@ -671,16 +914,12 @@ where
    (v.a_typeadresseerbaarobjectkort in ('LIG','STA') and v.b_typeadresseerbaarobjectkort='VBO' and v.b_pandstatus in ('Pand in gebruik (niet ingemeten)','Pand in gebruik', 'Sloopvergunning verleend', 'Verbouwing pand'))
   )
 ) ;
--- 20200530 Query returned successfully: 124 rows affected, 54 msec execution time.
-
-
 COMMIT;
+
 BEGIN;
---update
--- verwijder record van uniq_key met VBO en een gekoppeld LIG of STA indien het VBO  met een pand heeft met een statua dat het noig niet bewoond is.
-SELECT PRINT_NOTICE('start: 15 Update_6 '||current_time);
+SELECT PRINT_NOTICE('start: 10 Update_24   '||current_time);
 update adres_te_ontdubbelen
-set Verwijderen = 1
+set Verwijderen = 1,ontdubbelslag = 24
 where nad_id
 in(
 select distinct a_nad_id from adres_vergelijk v inner join adres_nog_te_ontdubbelen nog on v.a_uniq_key  = nog.uniq_key
@@ -689,15 +928,12 @@ where
   ( v.a_typeadresseerbaarobjectkort='VBO' and v.b_typeadresseerbaarobjectkort in ('LIG','STA') and v.a_pandstatus in ('Pand buiten gebruik','Bouwvergunning verleend' , 'Bouw gestart'))
   )
 ) ;
--- 20200530 Query returned successfully: 119 rows affected, 40 msec execution
-
 COMMIT;
--- Peter van Wee 20210129 statement hieronder aangepast
+
 BEGIN;
--- het aantal nog te ondubellen records is nu zo gering dat we nu kiezen voor een dummyproof aanpak door het record te verwijderen met het  laagste adresseerbaarobject nr.
-SELECT PRINT_NOTICE('start: 16 Update_7 '||current_time);
+SELECT PRINT_NOTICE('start: 10 Update_25   '||current_time);
 update adres_te_ontdubbelen
-set Verwijderen = 1
+set Verwijderen = 1,ontdubbelslag = 25
 where (nad_id,rangorde_uniq_key)
 in(
 select o.nad_id, o.rangorde_uniq_key  from adres_nog_te_ontdubbelen N
@@ -709,20 +945,14 @@ group by o.uniq_key
 ) M on o.uniq_key=m.uniq_key
 where o.rangorde_uniq_key <> m.rangorde
 ) ;
-
--- 20200530 Query returned successfully: 10864 rows affected, 370 msec execution time.
-
 COMMIT;
+
+-- 20251008 Peter van Wee  check impact van de ontdubbelslagen
+-- select   ontdubbelslag, count(*) as aantal from adres_te_ontdubbelen where verwijderen =1
+-- group by ontdubbelslag
+-- order by ontdubbelslag;
+
 BEGIN;
-
-/*
--- check op aantal unieke uniq_key met en zonder Verwijderen
-
-Select count (distinct uniq_key) from adres_te_ontdubbelen ;--  9456
-Select count (distinct uniq_key) from adres_te_ontdubbelen where verwijderen = 0;-- 9456
-Select count (distinct nad_id) from adres_te_ontdubbelen where verwijderen = 0;  -- 9456
-Select count (distinct nad_id) from adres_te_ontdubbelen where verwijderen = 1;  -- 9520
-*/
 
 -- verwijdere de records uit Adresselectie  die inmiddels in adres_te_ontdubbelen het kenmerk verwijderen = 1 hebben.
 SELECT PRINT_NOTICE('start: 17 Delete_1 '||current_time);
@@ -786,8 +1016,7 @@ ALTER TABLE Adresselectie
 ----------------------------------------------------------------------------------------------------------------
 
 -- Hiervoor is van belang dat de tablefunc (1 malig ) is gedefinieerd
--- CREATE extension tablefunc;
-
+CREATE EXTENSION IF NOT exists tablefunc;
 
 
 BEGIN;
@@ -812,6 +1041,7 @@ from crosstab (
 FROM
   verblijfsobjectgebruiksdoelactueelbestaand VBOGBD
   group by   VBOGBD.identificatie ,   VBOGBD.gebruiksdoelverblijfsobject
+order by 1,2
  ',
 
   'select distinct gebruiksdoelverblijfsobject from   verblijfsobjectgebruiksdoelactueelbestaand order by 1'
@@ -848,8 +1078,6 @@ COMMIT;
 ----------------------------------------------------------------------------------------------------------------
 --  EINDE BLOK2  waarbij het gebruiksdoel wordt ge-pivot. Dus per VBO 1 regele met alle gebruiksdoelen er achtern
 ----------------------------------------------------------------------------------------------------------------
-
-
 
 ----------------------------------------------------------------------------------------------------------------
 --- START BLOK3 Woningtype vaststellen per PND, NAD en VBO.
@@ -1289,7 +1517,10 @@ DROP TABLE   if exists VBO_Actueelbestaand_met_aantal_verbonden_PND cascade;
 Create table VBO_Actueelbestaand_met_aantal_verbonden_PND as
 SELECT
   VBO_PND.identificatie as VBO_ID,VBO.verblijfsobjectstatus, text 'VBO' as typeadresseerbaarobject  ,
-  count(VBO_PND.gerelateerdpand) as AantalPND_VBO, max(VBO_PND.gerelateerdpand) as max_PND_ID, max(vbo.hoofdadres) as hoofdadres, max(VBO.oppervlakteverblijfsobject) as opp_verblijfsobject_m2
+  count(VBO_PND.gerelateerdpand) as AantalPND_VBO,
+  STRING_AGG(VBO_PND.gerelateerdpand, ',') as gerelateerde_panden,
+
+  max(VBO_PND.gerelateerdpand) as max_PND_ID, max(vbo.hoofdadres) as hoofdadres, max(VBO.oppervlakteverblijfsobject) as opp_verblijfsobject_m2
 FROM
   verblijfsobjectpandactueelbestaand VBO_PND
   inner join verblijfsobjectactueelbestaand VBO on VBO_PND.identificatie = VBO.identificatie
@@ -1334,6 +1565,7 @@ SELECT
 	VBO.typeadresseerbaarobject,
 	VBO.verblijfsobjectstatus,
 	VBO.aantalpnd_vbo as Aantal_pand_relaties_dit_VBO,
+	vbo.gerelateerde_panden as gerelateerde_panden_dit_VBO,
 	vbo.hoofdadres,
 	vbo.opp_verblijfsobject_m2,
 	VBO_WOON.woningtype as VBO_woningtype,
@@ -1382,7 +1614,9 @@ BEGIN;
 DROP TABLE IF EXISTS   adres_plus cascade;
 create table adres_plus as
 SELECT
-  adres.openbareruimtenaam, adres.verkorteopenbareruimtenaam ,
+  adres.openbareruimtenaam,
+  adres.verkorteopenbareruimtenaam,
+  adres.openbareruimtetype,
   adres.obr_id as openbareruimte_id,
   adres.huisnummer,
   adres.huisletter,
@@ -1418,6 +1652,7 @@ SELECT
   VBO_GBD.winkelfunctie,
   VBO_GBD.overige_gebruiksfunctie,
   VBO_PND.aantal_pand_relaties_dit_vbo,
+  VBO_PND.gerelateerde_panden_dit_VBO,
   VBO_PND.pnd_id_uniek as pand_id ,
   VBO_PND.aantal_vbo_relaties_dit_pnd,
   VBO_PND.vbo_pnd_1_op_1,
@@ -1463,7 +1698,7 @@ update adres_plus adres  set opp_adresseerbaarobject_m2 = 0
  where   adres.opp_adresseerbaarobject_m2 = 999999 and  adres.adresseerbaarobject_status = 'Verblijfsobject gevormd' and adres.pandstatus is null;
  --20200531 Query returned successfully: 0 rows affected, 4.0 secs execution time.
 
-
+COMMIT;
 ----------------------------------------------------------------------------
 -- EINDE optioneel een aantal gegevens aanpassen b.v. wegens vreemde invoer-------
 ----------------------------------------------------------------------------
@@ -1527,19 +1762,18 @@ FROM
 
 COMMIT;
 
-
-
 BEGIN;
 
 --  eN nu alle tijdelijket tabellen/views verwijderen
-drop view  IF EXISTS  adres_nog_te_ontdubbelen cascade;
-DROP TABLE  IF EXISTS   BAG_WPL_ACTBEST_gegevens cascade;
+DROP VIEW  IF EXISTS  adres_nog_te_ontdubbelen cascade;
+DROP TABLE IF EXISTS nummeraanduidingactueelbestaand_compleet cascade;
+DROP TABLE IF EXISTS   BAG_WPL_ACTBEST_gegevens cascade;
 DROP TABLE IF EXISTS    adresselectie  cascade ;
 DROP TABLE IF EXISTS    adres_dubbel  cascade ;
 DROP TABLE IF EXISTS    adres_pand1  cascade ;
 DROP TABLE IF EXISTS    adres_pand2  cascade ;
 DROP TABLE IF EXISTS    adres_te_ontdubbelen  cascade ;
-DROP VIEW IF EXISTS    adres_vergelijk  cascade ;
+DROP VIEW  IF EXISTS    adres_vergelijk  cascade ;
 DROP TABLE IF EXISTS    ADRESSEERBAAROBJECT_aantal_NAD  cascade ;
 DROP TABLE IF EXISTS    woning_NAD_gegevens cascade;
 DROP TABLE IF EXISTS    woning_VBO_gegevens cascade;

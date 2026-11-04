@@ -12,38 +12,36 @@
         </DatasetSpecificInfo>
         <PropertyDefn>
             <Name>namespace</Name>
-            <ElementPath>identificatie|namespace</ElementPath>
+            <ElementPath>identificatie@domein</ElementPath>
             <Type>String</Type>
             <Width>25</Width>
         </PropertyDefn>
         <PropertyDefn>
             <Name>lokaalID</Name>
-            <ElementPath>identificatie|lokaalID</ElementPath>
+            <ElementPath>identificatie</ElementPath>
             <Type>String</Type>
         </PropertyDefn>
         <PropertyDefn>
             <Name>beginGeldigheid</Name>
             <ElementPath>historie|beginGeldigheid</ElementPath>
             <Type>String</Type>
-            <Width>23</Width>
         </PropertyDefn>
         <PropertyDefn>
             <Name>eindGeldigheid</Name>
             <ElementPath>historie|eindGeldigheid</ElementPath>
             <Type>String</Type>
-            <Width>23</Width>
+            <Nullable>True</Nullable>
         </PropertyDefn>
         <PropertyDefn>
             <Name>tijdstipRegistratie</Name>
             <ElementPath>historie|tijdstipRegistratie</ElementPath>
             <Type>String</Type>
-            <Width>23</Width>
         </PropertyDefn>
         <PropertyDefn>
             <Name>eindRegistratie</Name>
             <ElementPath>historie|eindRegistratie</ElementPath>
             <Type>String</Type>
-            <Width>23</Width>
+            <Nullable>True</Nullable>
         </PropertyDefn>
         <PropertyDefn>
             <Name>historievolgnummer</Name>
@@ -52,7 +50,7 @@
         </PropertyDefn>
         <PropertyDefn>
             <Name>historiestatuscode</Name>
-            <ElementPath>typeGrens|TypeGrens|code</ElementPath>
+            <ElementPath>historie|statusHistorie|StatusHistorie|code</ElementPath>
             <Type>String</Type>
             <Width>1</Width>
         </PropertyDefn>
@@ -63,12 +61,12 @@
         </PropertyDefn>
         <PropertyDefn>
             <Name>perceellinkslokaalID</Name>
-            <ElementPath>perceelLinks|lokaalID</ElementPath>
+            <ElementPath>perceelLinks</ElementPath>
             <Type>String</Type>
         </PropertyDefn>
         <PropertyDefn>
             <Name>perceelrechtslokaalID</Name>
-            <ElementPath>perceelRechts|lokaalID</ElementPath>
+            <ElementPath>perceelRechts</ElementPath>
             <Type>String</Type>
         </PropertyDefn>
         <!--        <GeomPropertyDefn>-->
@@ -90,38 +88,34 @@
         </DatasetSpecificInfo>
         <PropertyDefn>
             <Name>namespace</Name>
-            <ElementPath>identificatie|namespace</ElementPath>
+            <ElementPath>identificatie@domein</ElementPath>
             <Type>String</Type>
             <Width>25</Width>
         </PropertyDefn>
         <PropertyDefn>
             <Name>lokaalID</Name>
-            <ElementPath>identificatie|lokaalID</ElementPath>
+            <ElementPath>identificatie</ElementPath>
             <Type>String</Type>
         </PropertyDefn>
         <PropertyDefn>
             <Name>beginGeldigheid</Name>
             <ElementPath>historie|beginGeldigheid</ElementPath>
             <Type>String</Type>
-            <Width>23</Width>
         </PropertyDefn>
         <PropertyDefn>
             <Name>eindGeldigheid</Name>
             <ElementPath>historie|eindGeldigheid</ElementPath>
             <Type>String</Type>
-            <Width>23</Width>
         </PropertyDefn>
         <PropertyDefn>
             <Name>tijdstipRegistratie</Name>
             <ElementPath>historie|tijdstipRegistratie</ElementPath>
             <Type>String</Type>
-            <Width>23</Width>
         </PropertyDefn>
         <PropertyDefn>
             <Name>eindRegistratie</Name>
             <ElementPath>historie|eindRegistratie</ElementPath>
             <Type>String</Type>
-            <Width>23</Width>
         </PropertyDefn>
         <PropertyDefn>
             <Name>historievolgnummer</Name>
@@ -519,5 +513,73 @@
       </PropertyDefn>
       <!--Einde properties van OpenbareRuimteLabel-->
     </GMLFeatureClass>
+    <GMLFeatureClass>
+        <Name>Kwaliteit</Name>
+        <ElementPath>Kwaliteit</ElementPath>
+        <PropertyDefn>
+            <Name>namespace</Name>
+            <ElementPath>identificatie@domein</ElementPath>
+            <Type>String</Type>
+            <Width>25</Width>
+        </PropertyDefn>
+        <PropertyDefn>
+            <Name>lokaalID</Name>
+            <ElementPath>identificatie</ElementPath>
+            <Type>String</Type>
+        </PropertyDefn>
+        <PropertyDefn>
+            <Name>beginGeldigheid</Name>
+            <ElementPath>historie|beginGeldigheid</ElementPath>
+            <Type>String</Type>
+        </PropertyDefn>
+        <PropertyDefn>
+            <Name>eindGeldigheid</Name>
+            <ElementPath>historie|eindGeldigheid</ElementPath>
+            <Type>String</Type>
+            <Nullable>True</Nullable>
+        </PropertyDefn>
+        <PropertyDefn>
+            <Name>tijdstipRegistratie</Name>
+            <ElementPath>historie|tijdstipRegistratie</ElementPath>
+            <Type>String</Type>
+        </PropertyDefn>
+        <PropertyDefn>
+            <Name>eindRegistratie</Name>
+            <ElementPath>historie|eindRegistratie</ElementPath>
+            <Type>String</Type>
+            <Nullable>True</Nullable>
+        </PropertyDefn>
+        <PropertyDefn>
+            <Name>historievolgnummer</Name>
+            <ElementPath>historie|volgnummer</ElementPath>
+            <Type>Integer</Type>
+        </PropertyDefn>
+        <PropertyDefn>
+            <Name>historiestatuscode</Name>
+            <ElementPath>historie|statusHistorie|StatusHistorie|code</ElementPath>
+            <Type>String</Type>
+            <Width>1</Width>
+        </PropertyDefn>
+       <PropertyDefn>
+            <Name>classificatieelementaanduiding</Name>
+            <ElementPath>classificatie|ElementEnKwaliteit|element|ElementAanduiding|code</ElementPath>
+            <Type>Integer</Type>
+        </PropertyDefn>
+        <PropertyDefn>
+            <Name>classificatiekwaliteitsklasse</Name>
+            <ElementPath>classificatie|ElementEnKwaliteit|kwaliteit|Kwaliteitsklasse|code</ElementPath>
+            <Type>Integer</Type>
+        </PropertyDefn>
+        <PropertyDefn>
+            <Name>vanKadastraleGrensNamespace</Name>
+            <ElementPath>vanKadastraleGrens@domein</ElementPath>
+            <Type>String</Type>
+        </PropertyDefn>
+        <PropertyDefn>
+            <Name>vanKadastraleGrensID</Name>
+            <ElementPath>vanKadastraleGrens</ElementPath>
+            <Type>String</Type>
+        </PropertyDefn>
+   </GMLFeatureClass>
 
 </GMLFeatureClassList>
